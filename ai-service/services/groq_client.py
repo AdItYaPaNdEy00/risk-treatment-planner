@@ -1,8 +1,10 @@
 import os
 import time
 import logging
+import hashlib
 from groq import Groq
 from dotenv import load_dotenv
+from services.redis_client import r, cache_hits, cache_misses
 
 # Metrics
 response_times = []
@@ -22,7 +24,24 @@ if not api_key:
 client = Groq(api_key=api_key)
 
 
-def generate_text(prompt: str, max_retries: int = 3) -> str:
+def generate_text(prompt: str, use_cache: bool = True, max_retries: int = 3) -> str:
+    global cache_hits, cache_misses
+
+    print("CACHE CHECK RUNNING")
+    # 🔹 Create cache key
+    cache_key = hashlib.sha256(prompt.encode()).hexdigest()
+
+    # 🔹 Check cache (only if allowed)
+    if use_cache:
+        cached_response = r.get(cache_key)
+        if cached_response:
+            print("CACHE HIT")
+            cache_hits += 1
+            return cached_response
+        else:
+            print("CACHE MISS")
+            cache_misses += 1
+
     for attempt in range(max_retries):
         try:
             start = time.time()
@@ -37,12 +56,16 @@ def generate_text(prompt: str, max_retries: int = 3) -> str:
 
             # Track response time
             response_times.append((end - start) * 1000)
-
-            # Keep only last 10 entries
             if len(response_times) > 10:
                 response_times.pop(0)
 
-            return response.choices[0].message.content.strip()
+            output = response.choices[0].message.content.strip()
+
+            # 🔹 Save in Redis (TTL = 15 min)
+            if use_cache:
+                r.setex(cache_key, 900, output)
+
+            return output
 
         except Exception as e:
             logger.error(f"Attempt {attempt+1} failed: {str(e)}")

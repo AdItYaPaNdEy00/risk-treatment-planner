@@ -13,7 +13,10 @@ def categorise():
 
     user_input = data["text"]
 
-    # FINAL IMPROVED PROMPT (f-string)
+    # ✅ cache control (inside function)
+    use_cache = data.get("use_cache", True)
+
+    # FINAL IMPROVED PROMPT
     prompt = f"""
 You are an expert risk classification system.
 
@@ -21,7 +24,7 @@ Classify the input STRICTLY into one of:
 
 1. Operational Risk → system failures, downtime, technical issues, hardware/software problems
 2. Financial Risk → fraud, monetary loss, financial transactions
-3. Compliance Risk → legal violations, regulations, policies
+3. Compliance Risk → legal violations, regulations, policies, insider trading
 4. Strategic Risk → business decisions, pricing strategy, market strategy, planning mistakes
 
 Rules:
@@ -40,12 +43,13 @@ Return ONLY valid JSON:
 Input: {user_input}
 """
 
-    response = generate_text(prompt)
+    # ✅ cache-aware call
+    response = generate_text(prompt, use_cache=use_cache)
 
     try:
         result = json.loads(response)
 
-        # Safety: confidence range fix
+        # Safety fix
         result["confidence"] = max(0.0, min(1.0, result.get("confidence", 0)))
 
         return jsonify(result)
