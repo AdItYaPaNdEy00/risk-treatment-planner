@@ -4,6 +4,11 @@ import logging
 from groq import Groq
 from dotenv import load_dotenv
 
+# Metrics
+response_times = []
+start_time = time.time()
+MODEL_NAME = "llama-3.1-8b-instant"
+
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
@@ -20,11 +25,22 @@ client = Groq(api_key=api_key)
 def generate_text(prompt: str, max_retries: int = 3) -> str:
     for attempt in range(max_retries):
         try:
+            start = time.time()
+
             response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model=MODEL_NAME,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7
             )
+
+            end = time.time()
+
+            # Track response time
+            response_times.append((end - start) * 1000)
+
+            # Keep only last 10 entries
+            if len(response_times) > 10:
+                response_times.pop(0)
 
             return response.choices[0].message.content.strip()
 
@@ -32,9 +48,6 @@ def generate_text(prompt: str, max_retries: int = 3) -> str:
             logger.error(f"Attempt {attempt+1} failed: {str(e)}")
 
             if attempt < max_retries - 1:
-                wait_time = 2 ** attempt
-                logger.info(f"Retrying in {wait_time} sec...")
-                time.sleep(wait_time)
+                time.sleep(2 ** attempt)
             else:
-                logger.error("All retries failed")
-                return "Error: Unable to generate response"
+                return "Error"

@@ -51,3 +51,5 @@ def query_documents(query: str, n_results: int = 2):
     )
 
     return results
+def get_doc_count():
+    return collection.count()
