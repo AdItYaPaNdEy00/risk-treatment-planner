@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from services.groq_client import generate_text
+import json
 
 categorise_bp = Blueprint("categorise", __name__)
 
@@ -12,20 +13,28 @@ def categorise():
 
     user_input = data["text"]
 
-    # FIXED PROMPT (f-string)
+    # FINAL IMPROVED PROMPT (f-string)
     prompt = f"""
-You are a strict JSON generator.
+You are an expert risk classification system.
 
-Classify the input into one of:
-Operational Risk, Financial Risk, Compliance Risk, Strategic Risk.
+Classify the input STRICTLY into one of:
 
-Return ONLY valid JSON. No extra text.
+1. Operational Risk → system failures, downtime, technical issues, hardware/software problems
+2. Financial Risk → fraud, monetary loss, financial transactions
+3. Compliance Risk → legal violations, regulations, policies
+4. Strategic Risk → business decisions, pricing strategy, market strategy, planning mistakes
 
-Format:
+Rules:
+- Choose ONLY one category
+- Be accurate and consistent
+- Confidence must be between 0 and 1
+- Do not guess randomly
+
+Return ONLY valid JSON:
 {{
-  "category": "string",
+  "category": "...",
   "confidence": 0.0,
-  "reasoning": "string"
+  "reasoning": "..."
 }}
 
 Input: {user_input}
@@ -34,10 +43,9 @@ Input: {user_input}
     response = generate_text(prompt)
 
     try:
-        import json
         result = json.loads(response)
 
-        # safety fix
+        # Safety: confidence range fix
         result["confidence"] = max(0.0, min(1.0, result.get("confidence", 0)))
 
         return jsonify(result)
