@@ -6,6 +6,7 @@ categorise_bp = Blueprint("categorise", __name__)
 
 @categorise_bp.route("/categorise", methods=["POST"])
 def categorise():
+
     data = request.get_json()
 
     if not data or "text" not in data:
@@ -18,30 +19,30 @@ def categorise():
 
     # Prompt
     prompt = f"""
-    You are an expert risk classification system.
+You are an expert risk classification system.
 
-    Classify the input STRICTLY into one of:
+Classify the input STRICTLY into one of:
 
-    1. Operational Risk → system failures, downtime, technical issues, hardware/software problems
-    2. Financial Risk → fraud, monetary loss, financial transactions
-    3. Compliance Risk → legal violations, regulations, policies, insider trading, money laundering
-    4. Strategic Risk → business decisions, pricing strategy, market strategy, planning mistakes
+1. Operational Risk → system failures, downtime, technical issues, hardware/software problems
+2. Financial Risk → fraud, monetary loss, financial transactions
+3. Compliance Risk → legal violations, regulations, policies, insider trading, money laundering
+4. Strategic Risk → business decisions, pricing strategy, market strategy, planning mistakes
 
-    Rules:
-    - Choose ONLY one category
-    - Be accurate and consistent
-    - Confidence must be between 0 and 1
-    - Do not guess randomly
+Rules:
+- Choose ONLY one category
+- Be accurate and consistent
+- Confidence must be between 0 and 1
+- Do not guess randomly
 
-    Return ONLY valid JSON:
-    {{
-    "category": "...",
-    "confidence": 0.0,
-    "reasoning": "..."
-    }}
+Return ONLY valid JSON:
+{{
+  "category": "...",
+  "confidence": 0.0,
+  "reasoning": "..."
+}}
 
-    Input: {user_input}
-    """
+Input: {user_input}
+"""
 
     # Generate AI response
     response = generate_text(prompt, use_cache=use_cache)
@@ -49,8 +50,10 @@ def categorise():
     ai_output = response["text"]
     response_time = response["response_time_ms"]
     cached = response["cached"]
+    is_fallback = response["is_fallback"]
 
     try:
+
         # Parse AI JSON
         result = json.loads(ai_output)
 
@@ -60,7 +63,7 @@ def categorise():
             min(1.0, result.get("confidence", 0))
         )
 
-        # Final structured response
+        # Final response
         return jsonify({
             "data": result,
             "meta": {
@@ -68,11 +71,13 @@ def categorise():
                 "model_used": MODEL_NAME,
                 "tokens_used": len(ai_output.split()),
                 "response_time_ms": round(response_time, 2),
-                "cached": cached
+                "cached": cached,
+                "is_fallback": is_fallback
             }
         })
 
     except Exception:
+
         return jsonify({
             "data": {
                 "category": "Unknown",
@@ -81,7 +86,8 @@ def categorise():
             },
             "meta": {
                 "model_used": MODEL_NAME,
-                "cached": cached
+                "cached": cached,
+                "is_fallback": is_fallback
             },
             "raw_output": ai_output
         }), 500

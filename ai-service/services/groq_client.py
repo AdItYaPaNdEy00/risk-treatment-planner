@@ -25,33 +25,38 @@ client = Groq(api_key=api_key)
 
 
 def generate_text(prompt: str, use_cache: bool = True, max_retries: int = 3):
+
     global cache_hits, cache_misses
 
     print("CACHE CHECK RUNNING")
 
-    # Create cache key
+    # Generate cache key
     cache_key = hashlib.sha256(prompt.encode()).hexdigest()
 
-    # Check Redis cache
+    # ---------------- CACHE CHECK ----------------
     if use_cache:
+
         cached_response = r.get(cache_key)
 
         if cached_response:
+
             print("CACHE HIT")
             cache_hits += 1
 
             return {
                 "text": cached_response,
                 "response_time_ms": 0,
-                "cached": True
+                "cached": True,
+                "is_fallback": False
             }
 
         else:
             print("CACHE MISS")
             cache_misses += 1
 
-    # Retry loop
+    # ---------------- RETRY LOOP ----------------
     for attempt in range(max_retries):
+
         try:
             start = time.time()
 
@@ -68,7 +73,7 @@ def generate_text(prompt: str, use_cache: bool = True, max_retries: int = 3):
 
             end = time.time()
 
-            # Track response time
+            # Track response times
             response_times.append((end - start) * 1000)
 
             if len(response_times) > 10:
@@ -76,25 +81,38 @@ def generate_text(prompt: str, use_cache: bool = True, max_retries: int = 3):
 
             output = response.choices[0].message.content.strip()
 
-            # Save in Redis (15 min TTL)
+            # Save response in Redis
             if use_cache:
                 r.setex(cache_key, 900, output)
 
             return {
                 "text": output,
                 "response_time_ms": (end - start) * 1000,
-                "cached": False
+                "cached": False,
+                "is_fallback": False
             }
 
         except Exception as e:
+
             logger.error(f"Attempt {attempt + 1} failed: {str(e)}")
 
             if attempt < max_retries - 1:
+
+                # Exponential backoff
                 time.sleep(2 ** attempt)
 
             else:
+
+                # FINAL FALLBACK RESPONSE
                 return {
-                    "text": "Error",
+                    "text": """
+{
+  "category": "Operational Risk",
+  "confidence": 0.5,
+  "reasoning": "Fallback response due to AI service failure."
+}
+""",
                     "response_time_ms": 0,
-                    "cached": False
+                    "cached": False,
+                    "is_fallback": True
                 }
