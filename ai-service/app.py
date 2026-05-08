@@ -3,8 +3,10 @@ from routes.categorise import categorise_bp
 from routes.query import query_bp
 from routes.health import health_bp
 from routes.report import report_bp
+from extensions import limiter
 
 app = Flask(__name__)
+limiter.init_app(app)
 
 # Register routes
 app.register_blueprint(categorise_bp)

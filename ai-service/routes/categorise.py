@@ -1,10 +1,12 @@
 from flask import Blueprint, request, jsonify
 from services.groq_client import generate_text, MODEL_NAME
 import json
+from extensions import limiter
 
 categorise_bp = Blueprint("categorise", __name__)
 
 @categorise_bp.route("/categorise", methods=["POST"])
+@limiter.limit("5 per minute")
 def categorise():
 
     data = request.get_json()
