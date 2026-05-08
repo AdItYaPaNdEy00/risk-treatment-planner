@@ -24,31 +24,45 @@ if not api_key:
 client = Groq(api_key=api_key)
 
 
-def generate_text(prompt: str, use_cache: bool = True, max_retries: int = 3) -> str:
+def generate_text(prompt: str, use_cache: bool = True, max_retries: int = 3):
     global cache_hits, cache_misses
 
     print("CACHE CHECK RUNNING")
-    # 🔹 Create cache key
+
+    # Create cache key
     cache_key = hashlib.sha256(prompt.encode()).hexdigest()
 
-    # 🔹 Check cache (only if allowed)
+    # Check Redis cache
     if use_cache:
         cached_response = r.get(cache_key)
+
         if cached_response:
             print("CACHE HIT")
             cache_hits += 1
-            return cached_response
+
+            return {
+                "text": cached_response,
+                "response_time_ms": 0,
+                "cached": True
+            }
+
         else:
             print("CACHE MISS")
             cache_misses += 1
 
+    # Retry loop
     for attempt in range(max_retries):
         try:
             start = time.time()
 
             response = client.chat.completions.create(
                 model=MODEL_NAME,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
                 temperature=0.7
             )
 
@@ -56,21 +70,31 @@ def generate_text(prompt: str, use_cache: bool = True, max_retries: int = 3) -> 
 
             # Track response time
             response_times.append((end - start) * 1000)
+
             if len(response_times) > 10:
                 response_times.pop(0)
 
             output = response.choices[0].message.content.strip()
 
-            # 🔹 Save in Redis (TTL = 15 min)
+            # Save in Redis (15 min TTL)
             if use_cache:
                 r.setex(cache_key, 900, output)
 
-            return output
+            return {
+                "text": output,
+                "response_time_ms": (end - start) * 1000,
+                "cached": False
+            }
 
         except Exception as e:
-            logger.error(f"Attempt {attempt+1} failed: {str(e)}")
+            logger.error(f"Attempt {attempt + 1} failed: {str(e)}")
 
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)
+
             else:
-                return "Error"
+                return {
+                    "text": "Error",
+                    "response_time_ms": 0,
+                    "cached": False
+                }
