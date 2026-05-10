@@ -6,7 +6,7 @@ import time
 report_bp = Blueprint("report", __name__)
 
 # Store job results
-jobs = {}
+from services.job_store import jobs
 
 
 def generate_report_job(job_id, text):
